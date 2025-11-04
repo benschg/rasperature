@@ -31,7 +31,38 @@ Connect the BMP280 to your Raspberry Pi as follows:
 
 ## Software Setup
 
-### 1. Enable I2C on Raspberry Pi
+### Quick Setup (Automated)
+
+The easiest way to set up everything on your Raspberry Pi:
+
+```bash
+cd ~
+git clone <your-repo-url> rasperature
+cd rasperature
+
+# Make setup script executable
+chmod +x setup.sh
+
+# Run automated setup
+./setup.sh
+```
+
+The setup script will automatically:
+- ✓ Enable I2C interface
+- ✓ Install system dependencies (Python, i2c-tools, etc.)
+- ✓ Install uv package manager
+- ✓ Create virtual environment
+- ✓ Install Python dependencies
+- ✓ Detect BMP280 sensor
+- ✓ Run sensor test
+
+If I2C is enabled for the first time, you'll need to reboot and run the script again.
+
+### Manual Setup (Step-by-Step)
+
+If you prefer to set up manually or the automated script doesn't work:
+
+#### 1. Enable I2C on Raspberry Pi
 
 ```bash
 sudo raspi-config
@@ -44,7 +75,7 @@ Reboot after enabling:
 sudo reboot
 ```
 
-### 2. Verify I2C is Working
+#### 2. Verify I2C is Working
 
 ```bash
 # Check for I2C device
@@ -54,14 +85,14 @@ ls /dev/i2c*
 sudo i2cdetect -y 1
 ```
 
-### 3. Install uv (Fast Python Package Manager)
+#### 3. Install uv (Fast Python Package Manager)
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.cargo/env
 ```
 
-### 4. Clone and Setup Project
+#### 4. Clone and Setup Project
 
 ```bash
 cd ~
