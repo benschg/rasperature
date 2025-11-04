@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "adafruit-circuitpython-bmp280>=3.2.0",
+    "rpi-lgpio>=0.4",
 ]
 
 [project.optional-dependencies]

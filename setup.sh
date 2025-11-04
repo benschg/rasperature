@@ -97,7 +97,8 @@ install_system_deps() {
         python3-dev \
         i2c-tools \
         git \
-        curl
+        curl \
+        python3-lgpio
 
     print_success "System dependencies installed"
 }
@@ -151,7 +152,7 @@ setup_venv() {
 
     # Install Python dependencies
     print_info "Installing Python dependencies..."
-    uv pip install adafruit-circuitpython-bmp280
+    uv pip install adafruit-circuitpython-bmp280 rpi-lgpio
 
     print_success "Python dependencies installed"
 }
