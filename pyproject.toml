@@ -1,0 +1,21 @@
+[project]
+name = "rasperature"
+version = "0.1.0"
+description = "Raspberry Pi sensor data collection for BMP280 and other sensors"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "adafruit-circuitpython-bmp280>=3.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["sensor-readers.bmp280"]
