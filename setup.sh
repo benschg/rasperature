@@ -113,9 +113,14 @@ install_uv() {
 
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    # Source the cargo environment
+    # Add uv to PATH - check multiple possible locations
     if [ -f "$HOME/.cargo/env" ]; then
         source "$HOME/.cargo/env"
+    fi
+
+    # uv installs to ~/.local/bin by default
+    if [ -d "$HOME/.local/bin" ]; then
+        export PATH="$HOME/.local/bin:$PATH"
     fi
 
     print_success "uv installed"
@@ -125,9 +130,12 @@ install_uv() {
 setup_venv() {
     print_info "Setting up Python virtual environment..."
 
-    # Ensure we have uv in PATH
+    # Ensure we have uv in PATH - check multiple locations
     if [ -f "$HOME/.cargo/env" ]; then
         source "$HOME/.cargo/env"
+    fi
+    if [ -d "$HOME/.local/bin" ]; then
+        export PATH="$HOME/.local/bin:$PATH"
     fi
 
     # Create virtual environment

@@ -263,6 +263,7 @@ rasperature/
 ├── data/                         # CSV log files (gitignored)
 ├── .venv/                        # Virtual environment (gitignored)
 ├── .gitignore
+├── setup.sh                     # Automated setup script
 ├── pyproject.toml               # Project dependencies
 └── README.md                    # This file
 ```
