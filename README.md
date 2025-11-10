@@ -106,8 +106,10 @@ uv venv
 source .venv/bin/activate
 
 # Install dependencies
-uv pip install adafruit-circuitpython-bmp280
+uv pip install adafruit-circuitpython-bmp280 rpi-lgpio
 ```
+
+**Note:** `rpi-lgpio` is required for Raspberry Pi 5. Older Pi models may work without it.
 
 ## Usage
 
