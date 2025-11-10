@@ -1,0 +1,5 @@
+flask==3.0.0
+flask-cors==4.0.0
+adafruit-circuitpython-bmp280>=3.2.0
+rpi-lgpio>=0.4
+google-cloud-pubsub==2.19.0
