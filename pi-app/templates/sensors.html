@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Sensors - Rasperature{% endblock %}
+
+{% block content %}
+<div style="margin-top: 20px;">
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Available Sensor Types</h2>
+        </div>
+        <div id="sensor-types-container" class="grid"></div>
+    </div>
+
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Configured Sensors</h2>
+            <button onclick="showAddSensorModal()">➕ Add Sensor</button>
+        </div>
+        <div id="sensors-container"></div>
+    </div>
+</div>
+
+<!-- Add Sensor Modal -->
+<div id="add-sensor-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="card" style="max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;">
+        <h2>Add New Sensor</h2>
+        <form id="add-sensor-form" onsubmit="addSensor(event)">
+            <div class="form-group">
+                <label for="sensor-id">Sensor ID *</label>
+                <input type="text" id="sensor-id" name="sensor_id" required placeholder="e.g., bmp280_indoor">
+                <small style="color: #666;">Unique identifier for this sensor</small>
+            </div>
+
+            <div class="form-group">
+                <label for="sensor-type">Sensor Type *</label>
+                <select id="sensor-type" name="sensor_type" required onchange="updateSensorConfig()">
+                    <option value="">Select sensor type...</option>
+                </select>
+            </div>
+
+            <div id="sensor-config-container"></div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" onclick="hideAddSensorModal()" class="secondary">Cancel</button>
+                <button type="submit" class="success">Add Sensor</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let sensorTypes = {};
+
+    async function loadSensorTypes() {
+        try {
+            sensorTypes = await apiCall('/api/sensors/types');
+            displaySensorTypes(sensorTypes);
+            populateSensorTypeSelect(sensorTypes);
+        } catch (error) {
+            console.error('Failed to load sensor types:', error);
+        }
+    }
+
+    function displaySensorTypes(types) {
+        const container = document.getElementById('sensor-types-container');
+        let html = '';
+
+        Object.entries(types).forEach(([type, info]) => {
+            const statusClass = info.status === 'available' ? 'active' : 'inactive';
+            const statusText = info.status === 'available' ? 'Available' : 'Coming Soon';
+
+            html += `
+                <div class="card" style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                        <h3 style="color: #333;">${info.name}</h3>
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <div style="color: #666; margin-bottom: 10px;">
+                        <strong>Metrics:</strong> ${info.metrics.join(', ')}
+                    </div>
+                    <div style="color: #666;">
+                        <strong>Type:</strong> ${type}
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function populateSensorTypeSelect(types) {
+        const select = document.getElementById('sensor-type');
+        select.innerHTML = '<option value="">Select sensor type...</option>';
+
+        Object.entries(types).forEach(([type, info]) => {
+            if (info.status === 'available') {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = info.name;
+                select.appendChild(option);
+            }
+        });
+    }
+
+    function updateSensorConfig() {
+        const sensorType = document.getElementById('sensor-type').value;
+        const container = document.getElementById('sensor-config-container');
+
+        if (!sensorType || !sensorTypes[sensorType]) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const schema = sensorTypes[sensorType].config_schema;
+        let html = '<h3 style="margin: 20px 0 15px 0; color: #667eea;">Configuration</h3>';
+
+        Object.entries(schema).forEach(([key, config]) => {
+            html += `<div class="form-group">`;
+            html += `<label for="config-${key}">${config.label}</label>`;
+
+            if (config.type === 'number') {
+                html += `<input type="number" id="config-${key}" name="${key}"
+                         min="${config.min}" max="${config.max}" step="${config.step}"
+                         value="${sensorTypes[sensorType].default_config[key]}">`;
+            } else if (config.type === 'select') {
+                html += `<select id="config-${key}" name="${key}">`;
+                config.options.forEach(opt => {
+                    const selected = opt === sensorTypes[sensorType].default_config[key] ? 'selected' : '';
+                    const displayValue = typeof opt === 'number' ? `0x${opt.toString(16).toUpperCase()}` : opt;
+                    html += `<option value="${opt}" ${selected}>${displayValue}</option>`;
+                });
+                html += `</select>`;
+            } else {
+                html += `<input type="text" id="config-${key}" name="${key}"
+                         value="${sensorTypes[sensorType].default_config[key]}">`;
+            }
+
+            html += `<small style="color: #666;">${config.description}</small>`;
+            html += `</div>`;
+        });
+
+        container.innerHTML = html;
+    }
+
+    async function loadSensors() {
+        try {
+            const sensors = await apiCall('/api/sensors');
+            displaySensors(sensors);
+        } catch (error) {
+            document.getElementById('sensors-container').innerHTML = '<div class="empty-state">Failed to load sensors</div>';
+        }
+    }
+
+    function displaySensors(sensors) {
+        const container = document.getElementById('sensors-container');
+
+        if (sensors.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p style="font-size: 18px; margin-bottom: 10px;">No sensors configured</p>
+                    <p>Click "Add Sensor" to get started</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<table><thead><tr><th>Sensor ID</th><th>Type</th><th>Status</th><th>Last Reading</th><th>Errors</th><th>Actions</th></tr></thead><tbody>';
+
+        sensors.forEach(sensor => {
+            const statusClass = sensor.is_active ? 'active' : 'inactive';
+            const statusText = sensor.is_active ? 'Active' : 'Inactive';
+            const lastReading = sensor.last_reading_time
+                ? new Date(sensor.last_reading_time).toLocaleString()
+                : 'Never';
+
+            html += `
+                <tr>
+                    <td><strong>${sensor.sensor_id}</strong></td>
+                    <td>${sensor.sensor_type}</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>${lastReading}</td>
+                    <td>${sensor.error_count}</td>
+                    <td>
+                        <button onclick="removeSensor('${sensor.sensor_id}')" class="danger" style="padding: 6px 12px; font-size: 12px;">Remove</button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    function showAddSensorModal() {
+        document.getElementById('add-sensor-modal').style.display = 'flex';
+    }
+
+    function hideAddSensorModal() {
+        document.getElementById('add-sensor-modal').style.display = 'none';
+        document.getElementById('add-sensor-form').reset();
+        document.getElementById('sensor-config-container').innerHTML = '';
+    }
+
+    async function addSensor(event) {
+        event.preventDefault();
+
+        const formData = new FormData(event.target);
+        const sensorId = formData.get('sensor_id');
+        const sensorType = formData.get('sensor_type');
+
+        // Collect configuration
+        const config = {};
+        const schema = sensorTypes[sensorType].config_schema;
+        Object.keys(schema).forEach(key => {
+            const value = formData.get(key);
+            // Convert to appropriate type
+            if (schema[key].type === 'number') {
+                config[key] = parseFloat(value);
+            } else {
+                config[key] = value;
+            }
+        });
+
+        try {
+            await apiCall('/api/sensors', {
+                method: 'POST',
+                body: JSON.stringify({
+                    sensor_id: sensorId,
+                    sensor_type: sensorType,
+                    config: config
+                })
+            });
+
+            showAlert(`Sensor '${sensorId}' added successfully`, 'success');
+            hideAddSensorModal();
+            loadSensors();
+        } catch (error) {
+            // Error already shown by apiCall
+        }
+    }
+
+    async function removeSensor(sensorId) {
+        if (!confirm(`Are you sure you want to remove sensor '${sensorId}'?`)) {
+            return;
+        }
+
+        try {
+            await apiCall(`/api/sensors/${sensorId}`, { method: 'DELETE' });
+            showAlert(`Sensor '${sensorId}' removed successfully`, 'success');
+            loadSensors();
+        } catch (error) {
+            // Error already shown by apiCall
+        }
+    }
+
+    // Initial load
+    loadSensorTypes();
+    loadSensors();
+</script>
+{% endblock %}

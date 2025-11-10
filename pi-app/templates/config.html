@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Rasperature{% endblock %}
+
+{% block content %}
+<div style="margin-top: 20px;">
+    <div class="card">
+        <h2>Device Configuration</h2>
+        <form id="device-config-form" onsubmit="saveDeviceConfig(event)">
+            <div class="form-group">
+                <label for="device-id">Device ID</label>
+                <input type="text" id="device-id" name="device_id" required>
+                <small style="color: #666;">Unique identifier for this Raspberry Pi device</small>
+            </div>
+
+            <div class="form-group">
+                <label for="customer-id">Customer ID</label>
+                <input type="text" id="customer-id" name="customer_id" required>
+                <small style="color: #666;">Customer or organization identifier</small>
+            </div>
+
+            <div class="form-group">
+                <label for="location">Location</label>
+                <input type="text" id="location" name="location" required>
+                <small style="color: #666;">Physical location of this device (e.g., "warehouse_a", "office_201")</small>
+            </div>
+
+            <div class="form-group">
+                <label for="update-frequency">Update Frequency (seconds)</label>
+                <input type="number" id="update-frequency" name="update_frequency" min="1" max="3600" required>
+                <small style="color: #666;">How often to read sensors (1-3600 seconds)</small>
+            </div>
+
+            <button type="submit" class="success">💾 Save Device Configuration</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Edge Downsampling Thresholds</h2>
+        <p style="margin-bottom: 20px; color: #666;">
+            Data is only published to the cloud when values change beyond these thresholds. This reduces cloud costs significantly.
+        </p>
+        <form id="thresholds-form" onsubmit="saveThresholds(event)">
+            <div class="form-group">
+                <label for="threshold-temperature">Temperature Threshold (°C)</label>
+                <input type="number" id="threshold-temperature" name="temperature" step="0.1" min="0" required>
+                <small style="color: #666;">Publish when temperature changes by more than this value</small>
+            </div>
+
+            <div class="form-group">
+                <label for="threshold-pressure">Pressure Threshold (hPa)</label>
+                <input type="number" id="threshold-pressure" name="pressure" step="0.1" min="0" required>
+                <small style="color: #666;">Publish when pressure changes by more than this value</small>
+            </div>
+
+            <div class="form-group">
+                <label for="threshold-humidity">Humidity Threshold (%)</label>
+                <input type="number" id="threshold-humidity" name="humidity" step="0.1" min="0" required>
+                <small style="color: #666;">Publish when humidity changes by more than this value</small>
+            </div>
+
+            <div class="form-group">
+                <label for="threshold-altitude">Altitude Threshold (m)</label>
+                <input type="number" id="threshold-altitude" name="altitude" step="0.1" min="0" required>
+                <small style="color: #666;">Publish when altitude changes by more than this value</small>
+            </div>
+
+            <button type="submit" class="success">💾 Save Thresholds</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Cloud Publishing (Google Cloud Pub/Sub)</h2>
+        <form id="cloud-config-form" onsubmit="saveCloudConfig(event)">
+            <div class="form-group">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="cloud-enabled" name="enabled" style="width: auto; margin-right: 10px;">
+                    Enable Cloud Publishing
+                </label>
+            </div>
+
+            <div id="cloud-config-fields" style="display: none;">
+                <div class="form-group">
+                    <label for="project-id">GCP Project ID</label>
+                    <input type="text" id="project-id" name="project_id">
+                    <small style="color: #666;">Your Google Cloud Platform project ID</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="topic-name">Pub/Sub Topic Name</label>
+                    <input type="text" id="topic-name" name="topic_name">
+                    <small style="color: #666;">Name of the Pub/Sub topic to publish to (default: sensor-data-raw)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="credentials-file">Credentials File Path</label>
+                    <input type="text" id="credentials-file" name="credentials_file">
+                    <small style="color: #666;">Path to service account key JSON file</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="batch-size">Batch Size</label>
+                    <input type="number" id="batch-size" name="batch_size" min="1" max="100">
+                    <small style="color: #666;">Number of messages to batch before publishing (default: 10)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="max-batch-wait">Max Batch Wait (seconds)</label>
+                    <input type="number" id="max-batch-wait" name="max_batch_wait" min="1" max="60">
+                    <small style="color: #666;">Maximum time to wait for batch to fill (default: 5)</small>
+                </div>
+            </div>
+
+            <button type="submit" class="success">💾 Save Cloud Configuration</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Publishing Statistics</h2>
+        <div id="stats-container">
+            <div class="loading">Loading statistics...</div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let config = {};
+
+    async function loadConfig() {
+        try {
+            config = await apiCall('/api/config');
+            populateDeviceConfig(config);
+            populateThresholds(config.thresholds);
+            populateCloudConfig(config.cloud);
+            loadStats();
+        } catch (error) {
+            showAlert('Failed to load configuration', 'error');
+        }
+    }
+
+    function populateDeviceConfig(config) {
+        document.getElementById('device-id').value = config.device_id || '';
+        document.getElementById('customer-id').value = config.customer_id || '';
+        document.getElementById('location').value = config.location || '';
+        document.getElementById('update-frequency').value = config.update_frequency || 60;
+    }
+
+    function populateThresholds(thresholds) {
+        document.getElementById('threshold-temperature').value = thresholds.temperature || 0.5;
+        document.getElementById('threshold-pressure').value = thresholds.pressure || 2.0;
+        document.getElementById('threshold-humidity').value = thresholds.humidity || 2.0;
+        document.getElementById('threshold-altitude').value = thresholds.altitude || 5.0;
+    }
+
+    function populateCloudConfig(cloud) {
+        document.getElementById('cloud-enabled').checked = cloud.enabled || false;
+        document.getElementById('project-id').value = cloud.project_id || '';
+        document.getElementById('topic-name').value = cloud.topic_name || 'sensor-data-raw';
+        document.getElementById('credentials-file').value = cloud.credentials_file || '';
+        document.getElementById('batch-size').value = cloud.batch_size || 10;
+        document.getElementById('max-batch-wait').value = cloud.max_batch_wait || 5;
+
+        toggleCloudFields();
+    }
+
+    function toggleCloudFields() {
+        const enabled = document.getElementById('cloud-enabled').checked;
+        document.getElementById('cloud-config-fields').style.display = enabled ? 'block' : 'none';
+    }
+
+    document.getElementById('cloud-enabled').addEventListener('change', toggleCloudFields);
+
+    async function saveDeviceConfig(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+
+        const updates = {
+            device_id: formData.get('device_id'),
+            customer_id: formData.get('customer_id'),
+            location: formData.get('location'),
+            update_frequency: parseInt(formData.get('update_frequency'))
+        };
+
+        try {
+            await apiCall('/api/config', {
+                method: 'PUT',
+                body: JSON.stringify(updates)
+            });
+            showAlert('Device configuration saved successfully', 'success');
+        } catch (error) {
+            // Error already shown by apiCall
+        }
+    }
+
+    async function saveThresholds(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+
+        const thresholds = {
+            temperature: parseFloat(formData.get('temperature')),
+            pressure: parseFloat(formData.get('pressure')),
+            humidity: parseFloat(formData.get('humidity')),
+            altitude: parseFloat(formData.get('altitude'))
+        };
+
+        try {
+            await apiCall('/api/config/thresholds', {
+                method: 'PUT',
+                body: JSON.stringify(thresholds)
+            });
+            showAlert('Thresholds saved successfully', 'success');
+        } catch (error) {
+            // Error already shown by apiCall
+        }
+    }
+
+    async function saveCloudConfig(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+
+        const cloud = {
+            enabled: formData.get('enabled') === 'on',
+            project_id: formData.get('project_id'),
+            topic_name: formData.get('topic_name'),
+            credentials_file: formData.get('credentials_file'),
+            batch_size: parseInt(formData.get('batch_size')),
+            max_batch_wait: parseInt(formData.get('max_batch_wait'))
+        };
+
+        try {
+            await apiCall('/api/config', {
+                method: 'PUT',
+                body: JSON.stringify({ cloud })
+            });
+            showAlert('Cloud configuration saved successfully. Application will restart to apply changes.', 'success');
+            setTimeout(() => location.reload(), 2000);
+        } catch (error) {
+            // Error already shown by apiCall
+        }
+    }
+
+    async function loadStats() {
+        try {
+            const stats = await apiCall('/api/stats');
+            displayStats(stats);
+        } catch (error) {
+            document.getElementById('stats-container').innerHTML = '<div class="empty-state">Failed to load statistics</div>';
+        }
+    }
+
+    function displayStats(stats) {
+        const container = document.getElementById('stats-container');
+
+        let html = '<div class="grid">';
+
+        html += `
+            <div class="stat-card">
+                <h3>Total Sensors</h3>
+                <div class="value">${stats.sensor_count}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Active Sensors</h3>
+                <div class="value">${stats.active_sensors}</div>
+            </div>
+        `;
+
+        if (stats.cloud) {
+            html += `
+                <div class="stat-card">
+                    <h3>Messages Published</h3>
+                    <div class="value">${stats.cloud.publish_count}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Publish Errors</h3>
+                    <div class="value">${stats.cloud.error_count}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Queue Size</h3>
+                    <div class="value">${stats.cloud.queue_size}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Offline Buffer</h3>
+                    <div class="value">${stats.cloud.offline_buffer_size}</div>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    // Initial load
+    loadConfig();
+
+    // Refresh stats every 10 seconds
+    setInterval(loadStats, 10000);
+</script>
+{% endblock %}

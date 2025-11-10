@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Rasperature{% endblock %}
+
+{% block content %}
+<div style="margin-top: 20px;">
+    <div class="card">
+        <h2>System Status</h2>
+        <div class="grid">
+            <div class="stat-card">
+                <h3>Active Sensors</h3>
+                <div class="value" id="sensor-count">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Collection Status</h3>
+                <div class="value" id="collection-status">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Update Frequency</h3>
+                <div><span class="value" id="update-frequency">-</span> <span class="unit">seconds</span></div>
+            </div>
+            <div class="stat-card">
+                <h3>Cloud Publishing</h3>
+                <div class="value" id="cloud-status">-</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Current Readings</h2>
+            <div>
+                <button onclick="startCollection()" class="success">▶️ Start</button>
+                <button onclick="stopCollection()" class="danger">⏹️ Stop</button>
+                <button onclick="refreshReadings()">🔄 Refresh</button>
+            </div>
+        </div>
+        <div id="readings-container"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let autoRefresh = null;
+
+    async function loadSystemInfo() {
+        try {
+            const info = await apiCall('/api/info');
+            document.getElementById('sensor-count').textContent = info.sensor_count;
+            document.getElementById('collection-status').textContent = info.is_collecting ? 'Running' : 'Stopped';
+            document.getElementById('update-frequency').textContent = info.update_frequency;
+            document.getElementById('cloud-status').textContent = info.cloud_enabled ? 'Enabled' : 'Disabled';
+        } catch (error) {
+            console.error('Failed to load system info:', error);
+        }
+    }
+
+    async function loadReadings() {
+        try {
+            const readings = await apiCall('/api/readings');
+            displayReadings(readings);
+        } catch (error) {
+            document.getElementById('readings-container').innerHTML = '<div class="empty-state">Failed to load readings</div>';
+        }
+    }
+
+    function displayReadings(readings) {
+        const container = document.getElementById('readings-container');
+
+        if (readings.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p style="font-size: 18px; margin-bottom: 10px;">No sensors configured</p>
+                    <p>Add sensors from the <a href="/sensors" style="color: #667eea;">Sensors page</a></p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<div class="grid">';
+
+        readings.forEach(reading => {
+            const status = reading.status === 'ok' ? 'active' : 'inactive';
+            const statusText = reading.status === 'ok' ? 'OK' : 'ERROR';
+
+            html += `
+                <div class="stat-card">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                        <div>
+                            <h3>${reading.sensor_id}</h3>
+                            <div style="opacity: 0.8; font-size: 12px;">${reading.sensor_type}</div>
+                        </div>
+                        <span class="status-badge ${status}">${statusText}</span>
+                    </div>
+            `;
+
+            if (reading.status === 'ok') {
+                const data = reading.readings;
+                html += '<div style="margin-top: 10px;">';
+
+                if (data.temperature !== undefined) {
+                    html += `<div style="margin-bottom: 8px;">
+                        <div style="opacity: 0.8; font-size: 12px;">Temperature</div>
+                        <div style="font-size: 24px; font-weight: 600;">${data.temperature.toFixed(1)}°C</div>
+                    </div>`;
+                }
+
+                if (data.pressure !== undefined) {
+                    html += `<div style="margin-bottom: 8px;">
+                        <div style="opacity: 0.8; font-size: 12px;">Pressure</div>
+                        <div style="font-size: 20px;">${data.pressure.toFixed(1)} hPa</div>
+                    </div>`;
+                }
+
+                if (data.altitude !== undefined) {
+                    html += `<div style="margin-bottom: 8px;">
+                        <div style="opacity: 0.8; font-size: 12px;">Altitude</div>
+                        <div style="font-size: 20px;">${data.altitude.toFixed(1)} m</div>
+                    </div>`;
+                }
+
+                if (data.humidity !== undefined) {
+                    html += `<div style="margin-bottom: 8px;">
+                        <div style="opacity: 0.8; font-size: 12px;">Humidity</div>
+                        <div style="font-size: 20px;">${data.humidity.toFixed(1)}%</div>
+                    </div>`;
+                }
+
+                html += '</div>';
+                html += `<div style="opacity: 0.6; font-size: 11px; margin-top: 10px;">Updated: ${new Date(reading.timestamp).toLocaleTimeString()}</div>`;
+            } else {
+                html += `<div style="margin-top: 10px; opacity: 0.8; font-size: 14px;">Error: ${reading.error || 'Unknown error'}</div>`;
+            }
+
+            html += '</div>';
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    async function startCollection() {
+        try {
+            await apiCall('/api/collection/start', { method: 'POST' });
+            showAlert('Data collection started', 'success');
+            loadSystemInfo();
+            startAutoRefresh();
+        } catch (error) {
+            // Error already shown by apiCall
+        }
+    }
+
+    async function stopCollection() {
+        try {
+            await apiCall('/api/collection/stop', { method: 'POST' });
+            showAlert('Data collection stopped', 'info');
+            loadSystemInfo();
+            stopAutoRefresh();
+        } catch (error) {
+            // Error already shown by apiCall
+        }
+    }
+
+    function refreshReadings() {
+        loadReadings();
+        loadSystemInfo();
+    }
+
+    function startAutoRefresh() {
+        if (autoRefresh) return;
+        autoRefresh = setInterval(() => {
+            loadReadings();
+        }, 5000); // Refresh every 5 seconds
+    }
+
+    function stopAutoRefresh() {
+        if (autoRefresh) {
+            clearInterval(autoRefresh);
+            autoRefresh = null;
+        }
+    }
+
+    // Initial load
+    loadSystemInfo();
+    loadReadings();
+
+    // Check if collection is running and start auto-refresh
+    apiCall('/api/info').then(info => {
+        if (info.is_collecting) {
+            startAutoRefresh();
+        }
+    });
+</script>
+{% endblock %}
